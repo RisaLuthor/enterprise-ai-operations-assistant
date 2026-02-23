@@ -1,0 +1,37 @@
+{
+  "event_id": "audit_1771805141",
+  "timestamp": "2026-02-23T00:05:41.230400Z",
+  "redacted_input": "Validate these rules and identify conflicts",
+  "route": {
+    "intent": "VALIDATE",
+    "confidence": 0.75,
+    "rationale": "Matched keywords for VALIDATE"
+  },
+  "plan": {
+    "plan_id": "plan_1771805141",
+    "created_at": "2026-02-23T00:05:41.230132+00:00",
+    "intent": "VALIDATE",
+    "confidence": 0.75,
+    "assumptions": [
+      "User wants to validate business rules or constraints.",
+      "System context may be partial; clarify missing inputs."
+    ],
+    "steps": [
+      "Extract rules and define them in a consistent schema.",
+      "Check for contradictions and missing branches.",
+      "Propose targeted test cases for risk areas.",
+      "Return a structured risk report + next actions."
+    ],
+    "required_inputs": [
+      "Rules/constraints in a structured form (or examples)",
+      "Edge cases or known failures (if any)"
+    ],
+    "risk_flags": [],
+    "output_format": "validation_report"
+  },
+  "redaction_counts": {
+    "email": 0,
+    "phone": 0,
+    "ssn": 0
+  }
+}
