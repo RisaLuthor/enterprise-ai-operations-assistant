@@ -18,6 +18,10 @@ def main(argv=None) -> int:
     parser.add_argument("--no-audit", action="store_true", help="Disable writing audit logs")
     parser.add_argument("--audit-dir", default="audit", help="Directory to write audit logs")
     parser.add_argument("--json", action="store_true", help="Output plan as JSON-like dict")
+
+    # ✅ NEW: schema path for schema-aware SQL planning
+    parser.add_argument("--schema", default=None, help="Path to a JSON schema file used for SQL planning")
+
     args = parser.parse_args(argv)
 
     user_text = " ".join(args.text).strip()
@@ -37,7 +41,8 @@ def main(argv=None) -> int:
     if plan.intent == "QUERY":
         from .tools.sql_generator import generate_safe_sql
 
-        sql_output = generate_safe_sql(user_text)
+        # ✅ NEW: pass schema_path into generator
+        sql_output = generate_safe_sql(user_text, schema_path=args.schema)
 
     # Print output
     if args.json:
