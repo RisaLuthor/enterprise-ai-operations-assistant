@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import argparse
-from dataclasses import asdict
 from datetime import datetime
-import sys
 
 from .router import route_intent
 from .planner import build_plan
@@ -24,7 +22,7 @@ def main(argv=None) -> int:
 
     user_text = " ".join(args.text).strip()
     if not user_text:
-        print("Provide a request text. Example:\n  enterprise-ai-ops \"Generate a SQL query to list active employees\"")
+        print('Provide a request text. Example:\n  enterprise-ai-ops "Generate a SQL query to list active employees"')
         return 2
 
     # Governance-first: redact before logging
@@ -34,26 +32,62 @@ def main(argv=None) -> int:
     route = route_intent(user_text)
     plan = build_plan(route, user_text)
 
+    # Optional: SQL generation for QUERY intent
+    sql_output = None
+    if plan.intent == "QUERY":
+        from .tools.sql_generator import generate_safe_sql
+
+        sql_output = generate_safe_sql(user_text)
+
     # Print output
     if args.json:
-        print(plan.to_dict())
+        out = {"plan": plan.to_dict()}
+        if sql_output:
+            out["sql"] = {
+                "dialect": getattr(sql_output, "dialect", "sqlserver"),
+                "query": sql_output.query,
+                "assumptions": sql_output.assumptions,
+                "safety_notes": sql_output.safety_notes,
+                "suggested_next_inputs": sql_output.suggested_next_inputs,
+            }
+        print(out)
     else:
         print(f"\nIntent: {plan.intent} (confidence={plan.confidence:.2f})")
         if plan.risk_flags:
             print(f"Risk flags: {', '.join(plan.risk_flags)}")
+
         print("\nAssumptions:")
         for a in plan.assumptions:
             print(f"  - {a}")
+
         print("\nSteps:")
         for s in plan.steps:
             print(f"  - {s}")
+
         if plan.required_inputs:
             print("\nRequired inputs:")
             for ri in plan.required_inputs:
                 print(f"  - {ri}")
+
         print(f"\nOutput format: {plan.output_format}\n")
 
-    # Audit log
+        if sql_output:
+            print("Generated SQL:")
+            print(sql_output.query)
+
+            print("\nSQL Assumptions:")
+            for a in sql_output.assumptions:
+                print(f"  - {a}")
+
+            print("\nSafety Notes:")
+            for note in sql_output.safety_notes:
+                print(f"  - {note}")
+
+            print("\nSuggested Next Inputs:")
+            for n in sql_output.suggested_next_inputs:
+                print(f"  - {n}")
+
+    # Audit log (always logs the plan; includes SQL if generated)
     if not args.no_audit:
         event_id = f"audit_{int(datetime.now().timestamp())}"
         event = AuditEvent(
