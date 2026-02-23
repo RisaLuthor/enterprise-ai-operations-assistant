@@ -1,0 +1,18 @@
+{
+  "tables": {
+    "dbo.Employees": [
+      "EmployeeID",
+      "Status",
+      "HireDate",
+      "FirstName",
+      "LastName",
+      "DepartmentID",
+      "EmailAddress"
+    ],
+    "dbo.Departments": [
+      "DepartmentID",
+      "DepartmentName",
+      "Status"
+    ]
+  }
+}
