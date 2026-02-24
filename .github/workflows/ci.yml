@@ -18,10 +18,13 @@ jobs:
           python-version: "3.11"
           cache: "pip"
 
-      - name: Install + import smoke test
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           python -m pip install --no-cache-dir -r requirements.txt
           python -m pip show fastapi uvicorn
           python -c "import fastapi; print('fastapi ok:', fastapi.__version__)"
+
+      - name: Basic import check
+        run: |
           python -c "import src.router, src.planner, src.governance.redact, src.audit.logger, src.tools.sql_generator, src.api"
