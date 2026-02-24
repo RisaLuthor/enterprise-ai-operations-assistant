@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import argparse
-from datetime import datetime
+from datetime import datetime, timezone
 
 from .router import route_intent
 from .planner import build_plan
@@ -19,7 +19,7 @@ def main(argv=None) -> int:
     parser.add_argument("--audit-dir", default="audit", help="Directory to write audit logs")
     parser.add_argument("--json", action="store_true", help="Output plan as JSON-like dict")
 
-    # ✅ NEW: schema path for schema-aware SQL planning
+    # Schema-aware SQL planning
     parser.add_argument("--schema", default=None, help="Path to a JSON schema file used for SQL planning")
 
     args = parser.parse_args(argv)
@@ -41,7 +41,6 @@ def main(argv=None) -> int:
     if plan.intent == "QUERY":
         from .tools.sql_generator import generate_safe_sql
 
-        # ✅ NEW: pass schema_path into generator
         sql_output = generate_safe_sql(user_text, schema_path=args.schema)
 
     # Print output
@@ -92,16 +91,29 @@ def main(argv=None) -> int:
             for n in sql_output.suggested_next_inputs:
                 print(f"  - {n}")
 
-    # Audit log (always logs the plan; includes SQL if generated)
+    # Audit log (logs plan + optional SQL artifact)
     if not args.no_audit:
         event_id = f"audit_{int(datetime.now().timestamp())}"
+
+        # Include SQL artifact in audit log if it exists
+        sql_payload = None
+        if sql_output:
+            sql_payload = {
+                "dialect": getattr(sql_output, "dialect", "sqlserver"),
+                "query": sql_output.query,
+                "assumptions": sql_output.assumptions,
+                "safety_notes": sql_output.safety_notes,
+                "suggested_next_inputs": sql_output.suggested_next_inputs,
+            }
+
         event = AuditEvent(
             event_id=event_id,
-            timestamp=datetime.utcnow().isoformat() + "Z",
+            timestamp=datetime.now(timezone.utc).isoformat(),
             redacted_input=redaction.redacted_text,
             route={"intent": route.intent.value, "confidence": route.confidence, "rationale": route.rationale},
             plan=plan.to_dict(),
             redaction_counts=redaction.redaction_counts,
+            sql=sql_payload,  # Requires AuditEvent to include sql: Optional[Dict[str, Any]] = None
         )
         path = write_audit_event(event, audit_dir=args.audit_dir)
         print(f"Audit log written: {path}")

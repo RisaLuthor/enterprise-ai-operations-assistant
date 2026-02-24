@@ -15,6 +15,34 @@ Enterprise systems operate on structured data, deterministic logic, and rule-hea
 
 ---
 
+## ⚡ 15-second demo (API)
+
+Start the service locally:
+
+```bash
+pip install -r requirements.txt
+python -m uvicorn src.api:app --host 0.0.0.0 --port 8001
+curl -s http://127.0.0.1:8001/
+---
+
+### Makefile shortcuts
+
+```bash
+make api PORT=8001
+make health PORT=8001
+make demo PORT=8001
+make docker-build
+make docker-run PORT=8001
+
+---
+
+# Test it
+```bash
+make health PORT=8001
+make demo PORT=8001
+
+---
+
 ## 🧠 Core Capabilities
 
 • Natural language interpretation  
@@ -55,3 +83,16 @@ Active development. Initial focus on reasoning workflows, query planning logic, 
 ## 🎯 Engineering Objective
 
 Demonstrate practical AI augmentation strategies for structured enterprise systems rather than chat-only interfaces.
+
+---
+
+## 🧭 Why this project
+
+Most AI demonstrations focus on conversational interfaces. Enterprise environments, however, require:
+
+• Deterministic logic alignment  
+• Explicit reasoning artifacts  
+• Governance-aware outputs  
+• Audit & traceability support  
+
+This project demonstrates how AI can operate as a structured operational component rather than a chat-only assistant.

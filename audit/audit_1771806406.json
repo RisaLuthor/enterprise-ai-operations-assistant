@@ -1,0 +1,39 @@
+{
+  "event_id": "audit_1771806406",
+  "timestamp": "2026-02-23T00:26:46.920988Z",
+  "redacted_input": "Generate a SQL query to list active employees",
+  "route": {
+    "intent": "QUERY",
+    "confidence": 0.8999999999999999,
+    "rationale": "Matched keywords for QUERY"
+  },
+  "plan": {
+    "plan_id": "plan_1771806406",
+    "created_at": "2026-02-23T00:26:46.919071+00:00",
+    "intent": "QUERY",
+    "confidence": 0.8999999999999999,
+    "assumptions": [
+      "User intends to generate a SQL query plan (not execute it).",
+      "Target schema/tables are not provided yet.",
+      "Output should be safe-by-default (read-only)."
+    ],
+    "steps": [
+      "Confirm data source and schema constraints.",
+      "Draft a read-only SQL query with explicit joins/filters.",
+      "Add guardrails (limit rows, avoid sensitive columns).",
+      "Return query + explanation + assumptions."
+    ],
+    "required_inputs": [
+      "Database type (e.g., SQL Server, Postgres, Oracle)",
+      "Table names and key columns",
+      "Desired filters and timeframe"
+    ],
+    "risk_flags": [],
+    "output_format": "sql_plan"
+  },
+  "redaction_counts": {
+    "email": 0,
+    "phone": 0,
+    "ssn": 0
+  }
+}

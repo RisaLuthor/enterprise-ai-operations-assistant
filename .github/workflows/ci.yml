@@ -14,4 +14,4 @@ jobs:
           python-version: "3.11"
       - name: Basic import check
         run: |
-          python -c "import src.router, src.planner, src.governance.redact, src.audit.logger"
+         python -c "import src.router, src.planner, src.governance.redact, src.audit.logger, src.tools.sql_generator, src.api"

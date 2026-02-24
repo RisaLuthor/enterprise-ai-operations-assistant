@@ -1,0 +1,58 @@
+{
+  "event_id": "audit_1771809804",
+  "timestamp": "2026-02-23T01:23:24.991068+00:00",
+  "redacted_input": "Generate a SQL query to list active employees hired in the last 90 days",
+  "route": {
+    "intent": "QUERY",
+    "confidence": 0.8999999999999999,
+    "rationale": "Matched keywords for QUERY"
+  },
+  "plan": {
+    "plan_id": "plan_1771809804",
+    "created_at": "2026-02-23T01:23:24.989687+00:00",
+    "intent": "QUERY",
+    "confidence": 0.8999999999999999,
+    "assumptions": [
+      "User intends to generate a SQL query plan (not execute it).",
+      "Target schema/tables are not provided yet.",
+      "Output should be safe-by-default (read-only)."
+    ],
+    "steps": [
+      "Confirm data source and schema constraints.",
+      "Draft a read-only SQL query with explicit joins/filters.",
+      "Add guardrails (limit rows, avoid sensitive columns).",
+      "Return query + explanation + assumptions."
+    ],
+    "required_inputs": [
+      "Database type (e.g., SQL Server, Postgres, Oracle)",
+      "Table names and key columns",
+      "Desired filters and timeframe"
+    ],
+    "risk_flags": [],
+    "output_format": "sql_plan"
+  },
+  "redaction_counts": {
+    "email": 0,
+    "phone": 0,
+    "ssn": 0
+  },
+  "sql": {
+    "dialect": "sqlserver",
+    "query": "SELECT TOP (100)\n    EmployeeID,\n    Status,\n    HireDate,\n    FirstName,\n    LastName,\n    DepartmentID\nFROM dbo.Employees\nWHERE Status = 'ACTIVE' AND HireDate >= DATEADD(DAY, -90, GETDATE())\n;",
+    "assumptions": [
+      "This is a draft SQL Server query intended for review (not execution).",
+      "Row limiting is applied by default (TOP 100) as a guardrail.",
+      "Schema guidance loaded from: examples/schema_ps.json"
+    ],
+    "safety_notes": [
+      "Read-only SELECT query with TOP (100) row limit applied.",
+      "Avoid selecting sensitive columns (SSN, passwords, personal contact info).",
+      "Confirm indexing and filters before running against production tables."
+    ],
+    "suggested_next_inputs": [
+      "Confirm the correct table(s) and key columns for your environment.",
+      "Provide exact status codes and date fields used in your system.",
+      "Specify ordering and expected row volume (for performance planning)."
+    ]
+  }
+}

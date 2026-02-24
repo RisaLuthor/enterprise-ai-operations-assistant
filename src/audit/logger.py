@@ -15,10 +15,7 @@ class AuditEvent:
     route: Dict[str, Any]
     plan: Dict[str, Any]
     redaction_counts: Dict[str, int]
-
-
-def _utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    sql: Optional[Dict[str, Any]] = None  # ✅ NEW
 
 
 def write_audit_event(event: AuditEvent, audit_dir: str = "audit") -> str:
