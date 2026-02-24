@@ -1,5 +1,8 @@
 # Enterprise AI Operations Assistant
 
+![CI](https://github.com/RisaLuthor/enterprise-ai-operations-assistant/actions/workflows/ci.yml/badge.svg)
+![License](https://img.shields.io/badge/license-MIT-blue.svg)
+
 An enterprise-minded AI assistant designed to enhance operational workflows through structured reasoning, intelligent query generation, and governance-aware decision support.
 
 ---
