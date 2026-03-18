@@ -2,13 +2,24 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 
 DEFAULT_TOP_N = 100
+SCHEMA_BASE_DIR = Path("schemas").resolve()
 
 SENSITIVE_COLUMN_HINTS = {
-    "password", "passwd", "ssn", "social", "dob", "birth", "email", "mail", "phone", "mobile"
+    "password",
+    "passwd",
+    "ssn",
+    "social",
+    "dob",
+    "birth",
+    "email",
+    "mail",
+    "phone",
+    "mobile",
 }
 
 
@@ -24,7 +35,27 @@ class SQLPlan:
 def _load_schema(schema_path: Optional[str]) -> Optional[Dict]:
     if not schema_path:
         return None
-    with open(schema_path, "r", encoding="utf-8") as f:
+
+    requested_path = Path(schema_path)
+
+    # Force relative paths to stay under the approved schemas directory.
+    if requested_path.is_absolute():
+        raise ValueError("Absolute schema paths are not allowed.")
+
+    resolved_path = (SCHEMA_BASE_DIR / requested_path).resolve()
+
+    # Prevent path traversal outside the approved directory.
+    if SCHEMA_BASE_DIR not in resolved_path.parents:
+        raise ValueError("Invalid schema path: path escapes approved schema directory.")
+
+    # Restrict to JSON files only.
+    if resolved_path.suffix.lower() != ".json":
+        raise ValueError("Invalid schema path: only .json files are allowed.")
+
+    if not resolved_path.is_file():
+        raise FileNotFoundError(f"Schema file not found: {resolved_path}")
+
+    with resolved_path.open("r", encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -107,7 +138,6 @@ def generate_safe_sql(
     schema = _load_schema(schema_path)
     table, cols = _choose_table(user_text, schema)
 
-    # Choose columns
     if cols == ["*"]:
         select_cols = ["*"]
     else:
@@ -130,7 +160,7 @@ FROM {table}
         f"Row limiting is applied by default (TOP {top_n}) as a guardrail.",
     ]
     if schema_path:
-        assumptions.append(f"Schema guidance loaded from: {schema_path}")
+        assumptions.append(f"Schema guidance loaded from approved schema directory using: {schema_path}")
     else:
         assumptions.append("No schema file provided; table/columns may be placeholders.")
 
@@ -138,6 +168,7 @@ FROM {table}
         f"Read-only SELECT query with TOP ({top_n}) row limit applied.",
         "Avoid selecting sensitive columns (SSN, passwords, personal contact info).",
         "Confirm indexing and filters before running against production tables.",
+        "Schema files are restricted to the local approved schemas directory.",
     ]
 
     suggested_next_inputs = [
