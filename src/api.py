@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import os
 import time
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
@@ -10,12 +11,18 @@ from fastapi import Depends, FastAPI, Header, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
 
-from .router import route_intent
-from .planner import build_plan
-from .governance.redact import redact_sensitive
-from .audit.logger import AuditEvent, write_audit_event
-from .tools.sql_generator import generate_safe_sql
-
+from src.audit.logger import AuditEvent, write_audit_event
+from src.billing.plans import PLANS
+from src.billing.provisioning import apply_square_subscription_update, provision_user
+from src.billing.square_webhooks import verify_square_webhook_signature
+from src.core.auth import AuthContext, require_api_key
+from src.core.errors import AppError, BadRequestError, app_error_handler, unhandled_error_handler
+from src.db.init_db import init_db
+from src.governance.redact import redact_sensitive
+from src.planner import build_plan
+from src.repositories.usage import get_monthly_usage_count, record_usage_event
+from src.router import route_intent
+from src.tools.sql_generator import generate_safe_sql
 
 # ------------------------------------------------------------------------------
 # Configuration
@@ -24,11 +31,6 @@ from .tools.sql_generator import generate_safe_sql
 APP_NAME = os.getenv("APP_NAME", "Enterprise AI Operations Assistant")
 APP_ENV = os.getenv("APP_ENV", "dev")
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
-REQUIRE_API_KEY = os.getenv("REQUIRE_API_KEY", "true").lower() == "true"
-
-INDIVIDUAL_API_KEY = os.getenv("INDIVIDUAL_API_KEY", "dev-individual-key")
-COMPANY_API_KEY = os.getenv("COMPANY_API_KEY", "dev-company-key")
-ENTERPRISE_API_KEY = os.getenv("ENTERPRISE_API_KEY", "dev-enterprise-key")
 
 
 logging.basicConfig(
@@ -36,6 +38,16 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+
+# ------------------------------------------------------------------------------
+# Lifespan
+# ------------------------------------------------------------------------------
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    init_db()
+    yield
 
 
 # ------------------------------------------------------------------------------
@@ -56,7 +68,7 @@ app = FastAPI(
         "- Schema-aware SQL drafting (safe-by-default)\n"
         "- API-key-ready commercial usage model\n"
     ),
-    version="1.1.0",
+    version="1.2.0",
     contact={
         "name": "Risa Luthor (Luthor.Tech)",
         "url": "https://rmluthor.us",
@@ -67,85 +79,23 @@ app = FastAPI(
         {"name": "Planning", "description": "Structured planning and optional SQL drafting endpoints."},
         {"name": "SQL", "description": "Direct SQL drafting endpoints for product/API use."},
     ],
+    lifespan=lifespan,
 )
 
 
 # ------------------------------------------------------------------------------
-# Errors
+# Exception handlers
 # ------------------------------------------------------------------------------
 
-class AppError(Exception):
-    def __init__(self, code: str, message: str, status_code: int = 400) -> None:
-        self.code = code
-        self.message = message
-        self.status_code = status_code
-        super().__init__(message)
-
-
-class UnauthorizedError(AppError):
-    def __init__(self, message: str = "Invalid or missing API key.") -> None:
-        super().__init__(code="unauthorized", message=message, status_code=401)
-
-
-class BadRequestError(AppError):
-    def __init__(self, message: str = "Invalid request.") -> None:
-        super().__init__(code="bad_request", message=message, status_code=400)
-
-
 @app.exception_handler(AppError)
-async def handle_app_error(_: Request, exc: AppError) -> JSONResponse:
-    return JSONResponse(
-        status_code=exc.status_code,
-        content={
-            "error": exc.code,
-            "message": exc.message,
-        },
-    )
+async def handle_app_error(request: Request, exc: AppError):
+    return await app_error_handler(request, exc)
 
 
 @app.exception_handler(Exception)
-async def handle_unexpected_error(_: Request, exc: Exception) -> JSONResponse:
+async def handle_unexpected_error(request: Request, exc: Exception):
     logger.exception("Unhandled exception", exc_info=exc)
-    return JSONResponse(
-        status_code=500,
-        content={
-            "error": "internal_server_error",
-            "message": "An unexpected error occurred.",
-        },
-    )
-
-
-# ------------------------------------------------------------------------------
-# Auth
-# ------------------------------------------------------------------------------
-
-class AuthContext(BaseModel):
-    api_key: str
-    plan: str
-
-
-def resolve_plan_for_api_key(api_key: str) -> Optional[str]:
-    if api_key == INDIVIDUAL_API_KEY:
-        return "individual"
-    if api_key == COMPANY_API_KEY:
-        return "company"
-    if api_key == ENTERPRISE_API_KEY:
-        return "enterprise"
-    return None
-
-
-def require_api_key(x_api_key: Optional[str] = Header(default=None)) -> AuthContext:
-    if not REQUIRE_API_KEY:
-        return AuthContext(api_key="dev-bypass", plan="enterprise")
-
-    if not x_api_key:
-        raise UnauthorizedError("Missing X-API-Key header.")
-
-    plan = resolve_plan_for_api_key(x_api_key)
-    if not plan:
-        raise UnauthorizedError("Invalid API key.")
-
-    return AuthContext(api_key=x_api_key, plan=plan)
+    return await unhandled_error_handler(request, exc)
 
 
 # ------------------------------------------------------------------------------
@@ -268,6 +218,19 @@ class SQLGenerateResponse(BaseModel):
     risk_level: str
 
 
+class ProvisionUserRequest(BaseModel):
+    email: str = Field(..., min_length=5, max_length=255)
+    plan: str = Field(..., min_length=3, max_length=50)
+    square_customer_id: Optional[str] = Field(default=None, max_length=255)
+
+
+class ProvisionUserResponse(BaseModel):
+    user_id: int
+    email: str
+    plan: str
+    api_key: str
+
+
 # ------------------------------------------------------------------------------
 # Routes
 # ------------------------------------------------------------------------------
@@ -321,16 +284,6 @@ def plan_endpoint(
     req: PlanRequest,
     auth: AuthContext = Depends(require_api_key),
 ) -> PlanResponse:
-    """
-    Generate a governance-aware planning artifact.
-
-    Workflow:
-    1) Redact sensitive input before any logging
-    2) Route intent deterministically
-    3) Build a structured plan artifact
-    4) If intent is QUERY, produce schema-aware SQL draft
-    5) Optionally write an audit event (redacted input + plan + SQL)
-    """
     user_text = req.text.strip()
 
     redaction = redact_sensitive(user_text)
@@ -340,7 +293,7 @@ def plan_endpoint(
     sql_payload = None
     if plan.intent == "QUERY":
         sql_output = generate_safe_sql(
-            user_text,
+            user_text=user_text,
             schema_name=req.schema_name,
         )
         sql_payload = {
@@ -394,23 +347,35 @@ def generate_sql_endpoint(
     auth: AuthContext = Depends(require_api_key),
 ) -> SQLGenerateResponse:
     logger.info(
-        "sql_generate_requested plan=%s schema_name=%s top_n=%s",
+        "sql_generate_requested user_id=%s email=%s plan=%s schema_name=%s top_n=%s",
+        auth.user_id,
+        auth.email,
         auth.plan,
         req.schema_name,
         req.top_n,
     )
 
-    if auth.plan == "individual" and req.top_n > 100:
-        raise BadRequestError("Individual plan supports top_n up to 100.")
+    plan_def = PLANS.get(auth.plan)
+    if not plan_def:
+        raise BadRequestError("Unknown plan configuration.")
 
-    if auth.plan == "company" and req.top_n > 250:
-        raise BadRequestError("Company plan supports top_n up to 250.")
+    if req.top_n > plan_def.max_top_n:
+        raise BadRequestError(
+            f"{auth.plan.capitalize()} plan supports top_n up to {plan_def.max_top_n}."
+        )
+
+    current_usage = get_monthly_usage_count(auth.user_id)
+    if plan_def.monthly_request_limit is not None and current_usage >= plan_def.monthly_request_limit:
+        raise BadRequestError("Monthly request limit reached for this plan.")
 
     sql_output = generate_safe_sql(
         user_text=req.user_text,
         top_n=req.top_n,
         schema_name=req.schema_name,
     )
+
+    if auth.user_id != 0:
+        record_usage_event(auth.user_id, "/v1/sql/generate")
 
     risk_level = "LOW"
     if req.schema_name is None:
@@ -425,3 +390,66 @@ def generate_sql_endpoint(
         plan=auth.plan,
         risk_level=risk_level,
     )
+
+
+@app.post(
+    "/v1/admin/provision-user",
+    response_model=ProvisionUserResponse,
+    tags=["SQL"],
+    summary="Provision a user and API key",
+)
+def provision_user_endpoint(
+    req: ProvisionUserRequest,
+    auth: AuthContext = Depends(require_api_key),
+) -> ProvisionUserResponse:
+    if auth.plan != "enterprise":
+        raise BadRequestError("Only enterprise/admin credentials can provision users.")
+
+    result = provision_user(
+        email=req.email.strip().lower(),
+        plan=req.plan.strip().lower(),
+        square_customer_id=req.square_customer_id,
+    )
+    return ProvisionUserResponse(**result)
+
+
+@app.post(
+    "/v1/billing/square/webhook",
+    tags=["SQL"],
+    summary="Receive Square webhook events",
+)
+async def square_webhook_endpoint(
+    request: Request,
+    x_square_hmacsha256_signature: Optional[str] = Header(default=None),
+):
+    raw_body = (await request.body()).decode("utf-8")
+
+    if not verify_square_webhook_signature(raw_body, x_square_hmacsha256_signature):
+        return JSONResponse(status_code=403, content={"error": "invalid_signature"})
+
+    payload = await request.json()
+    event_type = payload.get("type")
+    data_object = payload.get("data", {}).get("object", {})
+
+    subscription = data_object.get("subscription", data_object)
+    customer_id = subscription.get("customer_id")
+    subscription_id = subscription.get("id")
+    status = subscription.get("status")
+
+    plan = None
+    if "individual" in raw_body.lower():
+        plan = "individual"
+    elif "company" in raw_body.lower():
+        plan = "company"
+    elif "enterprise" in raw_body.lower():
+        plan = "enterprise"
+
+    if event_type:
+        apply_square_subscription_update(
+            customer_id=customer_id,
+            subscription_id=subscription_id,
+            status=status,
+            plan=plan,
+        )
+
+    return {"received": True, "event_type": event_type}
