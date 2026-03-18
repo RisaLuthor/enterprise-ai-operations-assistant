@@ -10,6 +10,14 @@ venv/
 
 # Generated outputs
 audit/
+htmlcov/
+.coverage
+.pytest_cache/
+.ruff_cache/
+
+# Env files
+.env
+.env.local
 
 # OS/editor
 .DS_Store
