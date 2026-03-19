@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Enterprise AI Operations Assistant | Pricing</title>
+    <style>
+      :root {
+        --bg: #0b1020;
+        --panel: #111833;
+        --panel-2: #162042;
+        --text: #edf2ff;
+        --muted: #aab6d3;
+        --line: #26345f;
+        --accent: #6ea8fe;
+        --accent-2: #8b5cf6;
+        --success: #22c55e;
+        --danger: #ef4444;
+        --warning: #f59e0b;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background:
+          radial-gradient(circle at top right, rgba(110, 168, 254, 0.16), transparent 30%),
+          radial-gradient(circle at top left, rgba(139, 92, 246, 0.14), transparent 25%),
+          var(--bg);
+        color: var(--text);
+      }
+
+      .wrap {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 40px 20px 72px;
+      }
+
+      .hero {
+        text-align: center;
+        margin-bottom: 36px;
+      }
+
+      .eyebrow {
+        display: inline-block;
+        padding: 8px 12px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        color: var(--muted);
+        background: rgba(255, 255, 255, 0.03);
+        font-size: 13px;
+        letter-spacing: 0.03em;
+      }
+
+      h1 {
+        margin: 18px 0 12px;
+        font-size: clamp(34px, 5vw, 56px);
+        line-height: 1.05;
+      }
+
+      .sub {
+        max-width: 760px;
+        margin: 0 auto;
+        color: var(--muted);
+        font-size: 18px;
+        line-height: 1.6;
+      }
+
+      .email-panel {
+        margin: 32px auto 40px;
+        max-width: 760px;
+        padding: 18px;
+        border: 1px solid var(--line);
+        border-radius: 20px;
+        background: rgba(17, 24, 51, 0.75);
+        backdrop-filter: blur(10px);
+      }
+
+      .email-label {
+        display: block;
+        margin-bottom: 10px;
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .email-row {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+
+      .email-input {
+        flex: 1 1 360px;
+        min-width: 260px;
+        padding: 14px 16px;
+        border-radius: 14px;
+        border: 1px solid var(--line);
+        background: var(--panel);
+        color: var(--text);
+        font-size: 16px;
+        outline: none;
+      }
+
+      .email-input:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px rgba(110, 168, 254, 0.18);
+      }
+
+      .note {
+        margin-top: 12px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 20px;
+      }
+
+      .card {
+        position: relative;
+        border: 1px solid var(--line);
+        background: linear-gradient(180deg, rgba(17, 24, 51, 0.98), rgba(22, 32, 66, 0.98));
+        border-radius: 24px;
+        padding: 24px;
+        box-shadow: 0 18px 48px rgba(0, 0, 0, 0.25);
+      }
+
+      .card.featured {
+        border-color: rgba(110, 168, 254, 0.45);
+        box-shadow: 0 22px 56px rgba(110, 168, 254, 0.12);
+      }
+
+      .badge {
+        display: inline-block;
+        margin-bottom: 14px;
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: rgba(110, 168, 254, 0.14);
+        color: #cfe0ff;
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      .plan-name {
+        font-size: 26px;
+        margin: 0 0 8px;
+      }
+
+      .price {
+        margin: 0;
+        font-size: 38px;
+        font-weight: 700;
+      }
+
+      .price small {
+        color: var(--muted);
+        font-size: 16px;
+        font-weight: 500;
+      }
+
+      .plan-copy {
+        color: var(--muted);
+        line-height: 1.6;
+        min-height: 72px;
+      }
+
+      .list {
+        padding: 0;
+        margin: 20px 0 24px;
+        list-style: none;
+      }
+
+      .list li {
+        padding: 10px 0;
+        border-top: 1px solid rgba(255, 255, 255, 0.06);
+        color: #dce6ff;
+      }
+
+      .list li:first-child {
+        border-top: 0;
+      }
+
+      .cta {
+        width: 100%;
+        border: 0;
+        border-radius: 14px;
+        padding: 14px 16px;
+        cursor: pointer;
+        font-size: 16px;
+        font-weight: 700;
+        transition: transform 0.15s ease, opacity 0.15s ease, box-shadow 0.15s ease;
+      }
+
+      .cta:hover {
+        transform: translateY(-1px);
+      }
+
+      .cta:disabled {
+        cursor: wait;
+        opacity: 0.75;
+      }
+
+      .cta.primary {
+        background: linear-gradient(135deg, var(--accent), var(--accent-2));
+        color: white;
+      }
+
+      .cta.secondary {
+        background: rgba(255, 255, 255, 0.06);
+        color: var(--text);
+        border: 1px solid var(--line);
+      }
+
+      .help {
+        margin-top: 14px;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.5;
+      }
+
+      .status {
+        display: none;
+        margin: 28px auto 0;
+        max-width: 760px;
+        padding: 14px 16px;
+        border-radius: 14px;
+        font-size: 14px;
+      }
+
+      .status.show {
+        display: block;
+      }
+
+      .status.info {
+        background: rgba(110, 168, 254, 0.12);
+        border: 1px solid rgba(110, 168, 254, 0.32);
+        color: #d7e6ff;
+      }
+
+      .status.success {
+        background: rgba(34, 197, 94, 0.12);
+        border: 1px solid rgba(34, 197, 94, 0.32);
+        color: #ddffe8;
+      }
+
+      .status.error {
+        background: rgba(239, 68, 68, 0.12);
+        border: 1px solid rgba(239, 68, 68, 0.32);
+        color: #ffe2e2;
+      }
+
+      .footer-note {
+        margin-top: 34px;
+        text-align: center;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      @media (max-width: 960px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+
+        .plan-copy {
+          min-height: 0;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <section class="hero">
+        <div class="eyebrow">Luthor.Tech · Enterprise AI Operations Assistant</div>
+        <h1>Safe, governed AI for SQL operations</h1>
+        <p class="sub">
+          Generate reviewable SQL drafts with plan-based access, governance-aware output,
+          and a product flow that can scale from individual users to enterprise teams.
+        </p>
+      </section>
+
+      <section class="email-panel">
+        <label class="email-label" for="buyerEmail">Email address for checkout</label>
+        <div class="email-row">
+          <input
+            id="buyerEmail"
+            class="email-input"
+            type="email"
+            placeholder="you@company.com"
+            autocomplete="email"
+          />
+        </div>
+        <div class="note">
+          During this beta phase, hosted checkout is live and access is provisioned through
+          the product backend. Use a real email address for payment flow testing.
+        </div>
+      </section>
+
+      <section class="grid">
+        <article class="card">
+          <div class="badge">Individual</div>
+          <h2 class="plan-name">Individual</h2>
+          <p class="price">$9 <small>/ month</small></p>
+          <p class="plan-copy">
+            Perfect for developers, analysts, and solo operators who want governed SQL draft generation.
+          </p>
+          <ul class="list">
+            <li>Safe SQL draft generation</li>
+            <li>Schema-guided output</li>
+            <li>Plan-based query guardrails</li>
+            <li>Ideal for personal workflows</li>
+          </ul>
+          <button class="cta primary" onclick="startCheckout('individual', this)">
+            Start Individual Checkout
+          </button>
+          <div class="help">Hosted Square checkout</div>
+        </article>
+
+        <article class="card featured">
+          <div class="badge">Company</div>
+          <h2 class="plan-name">Company</h2>
+          <p class="price">$49 <small>/ month</small></p>
+          <p class="plan-copy">
+            Built for teams that need stronger usage capacity, safer internal workflows, and shared tooling.
+          </p>
+          <ul class="list">
+            <li>Higher usage capacity</li>
+            <li>Team-oriented access path</li>
+            <li>Governed operational SQL assistance</li>
+            <li>Better fit for internal IT and ops</li>
+          </ul>
+          <button class="cta primary" onclick="startCheckout('company', this)">
+            Start Company Checkout
+          </button>
+          <div class="help">Hosted Square checkout</div>
+        </article>
+
+        <article class="card">
+          <div class="badge">Enterprise</div>
+          <h2 class="plan-name">Enterprise</h2>
+          <p class="price">Custom <small>/ contract</small></p>
+          <p class="plan-copy">
+            For larger organizations that need tailored deployment, governance controls, and deeper integration support.
+          </p>
+          <ul class="list">
+            <li>Custom onboarding</li>
+            <li>Integration and implementation path</li>
+            <li>Governance-focused deployment model</li>
+            <li>Enterprise support and expansion</li>
+          </ul>
+          <button class="cta secondary" onclick="startCheckout('enterprise', this)">
+            Contact / Enterprise Flow
+          </button>
+          <div class="help">Manual enterprise route</div>
+        </article>
+      </section>
+
+      <div id="statusBox" class="status info"></div>
+
+      <div class="footer-note">
+        Beta note: checkout is live. Post-payment access automation can be expanded with webhook-driven provisioning.
+      </div>
+    </div>
+
+    <script>
+      const statusBox = document.getElementById("statusBox");
+      const emailInput = document.getElementById("buyerEmail");
+
+      function showStatus(type, message) {
+        statusBox.className = `status show ${type}`;
+        statusBox.textContent = message;
+      }
+
+      async function startCheckout(plan, buttonEl) {
+        const email = (emailInput.value || "").trim().toLowerCase();
+
+        if (!email) {
+          showStatus("error", "Please enter the email address you want to use for checkout.");
+          emailInput.focus();
+          return;
+        }
+
+        const originalText = buttonEl.textContent;
+        buttonEl.disabled = true;
+        buttonEl.textContent = "Preparing checkout...";
+
+        try {
+          showStatus("info", `Creating ${plan} checkout...`);
+
+          const response = await fetch("/v1/billing/checkout/start", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              email,
+              plan,
+            }),
+          });
+
+          const data = await response.json();
+
+          if (!response.ok) {
+            throw new Error(data.message || data.detail || "Unable to start checkout.");
+          }
+
+          if (!data.checkout_url) {
+            throw new Error("Checkout URL was not returned.");
+          }
+
+          showStatus("success", "Checkout created. Redirecting now...");
+          window.location.href = data.checkout_url;
+        } catch (error) {
+          showStatus("error", error.message || "Something went wrong while starting checkout.");
+        } finally {
+          buttonEl.disabled = false;
+          buttonEl.textContent = originalText;
+        }
+      }
+    </script>
+  </body>
+</html>

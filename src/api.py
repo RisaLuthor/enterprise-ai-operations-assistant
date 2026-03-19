@@ -5,13 +5,15 @@ import os
 import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Dict, Optional
 
 from fastapi import Depends, FastAPI, Header, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field, field_validator
 
 from src.audit.logger import AuditEvent, write_audit_event
+from src.billing.checkout import create_checkout_for_plan
 from src.billing.plans import PLANS
 from src.billing.provisioning import apply_square_subscription_update, provision_user
 from src.billing.square_webhooks import verify_square_webhook_signature
@@ -31,7 +33,6 @@ from src.tools.sql_generator import generate_safe_sql
 APP_NAME = os.getenv("APP_NAME", "Enterprise AI Operations Assistant")
 APP_ENV = os.getenv("APP_ENV", "dev")
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
-
 
 logging.basicConfig(
     level=getattr(logging, LOG_LEVEL, logging.INFO),
@@ -67,8 +68,9 @@ app = FastAPI(
         "- Optional audit logging\n"
         "- Schema-aware SQL drafting (safe-by-default)\n"
         "- API-key-ready commercial usage model\n"
+        "- Billing and hosted checkout support\n"
     ),
-    version="1.2.0",
+    version="1.4.0",
     contact={
         "name": "Risa Luthor (Luthor.Tech)",
         "url": "https://rmluthor.us",
@@ -78,6 +80,7 @@ app = FastAPI(
         {"name": "Service", "description": "Service discovery and health monitoring endpoints."},
         {"name": "Planning", "description": "Structured planning and optional SQL drafting endpoints."},
         {"name": "SQL", "description": "Direct SQL drafting endpoints for product/API use."},
+        {"name": "Billing", "description": "Checkout, provisioning, billing, and pricing endpoints."},
     ],
     lifespan=lifespan,
 )
@@ -130,6 +133,8 @@ class RootResponse(BaseModel):
     health: str
     plan: str
     sql_generate: str
+    checkout_start: str
+    pricing: str
 
 
 class HealthResponse(BaseModel):
@@ -223,12 +228,61 @@ class ProvisionUserRequest(BaseModel):
     plan: str = Field(..., min_length=3, max_length=50)
     square_customer_id: Optional[str] = Field(default=None, max_length=255)
 
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, value: str) -> str:
+        cleaned = value.strip().lower()
+        if "@" not in cleaned:
+            raise ValueError("A valid email address is required.")
+        return cleaned
+
+    @field_validator("plan")
+    @classmethod
+    def validate_plan(cls, value: str) -> str:
+        cleaned = value.strip().lower()
+        allowed = {"individual", "company", "enterprise"}
+        if cleaned not in allowed:
+            raise ValueError(f"plan must be one of: {', '.join(sorted(allowed))}")
+        return cleaned
+
 
 class ProvisionUserResponse(BaseModel):
     user_id: int
     email: str
     plan: str
     api_key: str
+
+
+class CheckoutStartRequest(BaseModel):
+    email: str = Field(..., min_length=5, max_length=255)
+    plan: str = Field(..., min_length=3, max_length=50)
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, value: str) -> str:
+        cleaned = value.strip().lower()
+        if "@" not in cleaned:
+            raise ValueError("A valid email address is required.")
+        if cleaned.endswith("@example.com"):
+            raise ValueError("Use a real email address for checkout testing.")
+        return cleaned
+
+    @field_validator("plan")
+    @classmethod
+    def validate_plan(cls, value: str) -> str:
+        cleaned = value.strip().lower()
+        allowed = {"individual", "company", "enterprise"}
+        if cleaned not in allowed:
+            raise ValueError(f"plan must be one of: {', '.join(sorted(allowed))}")
+        return cleaned
+
+
+class CheckoutStartResponse(BaseModel):
+    email: str
+    plan: str
+    checkout_url: str
+    mode: str
+    square_payment_link_id: Optional[str] = None
 
 
 # ------------------------------------------------------------------------------
@@ -250,6 +304,8 @@ def root() -> RootResponse:
         health="/health",
         plan="/plan",
         sql_generate="/v1/sql/generate",
+        checkout_start="/v1/billing/checkout/start",
+        pricing="/pricing",
     )
 
 
@@ -267,6 +323,17 @@ def health() -> HealthResponse:
         app=APP_NAME,
         env=APP_ENV,
     )
+
+
+@app.get(
+    "/pricing",
+    response_class=HTMLResponse,
+    tags=["Billing"],
+    summary="Pricing page",
+)
+def pricing_page() -> HTMLResponse:
+    pricing_path = Path(__file__).resolve().parent / "frontend" / "pricing.html"
+    return HTMLResponse(pricing_path.read_text(encoding="utf-8"))
 
 
 @app.post(
@@ -395,7 +462,7 @@ def generate_sql_endpoint(
 @app.post(
     "/v1/admin/provision-user",
     response_model=ProvisionUserResponse,
-    tags=["SQL"],
+    tags=["Billing"],
     summary="Provision a user and API key",
 )
 def provision_user_endpoint(
@@ -414,8 +481,71 @@ def provision_user_endpoint(
 
 
 @app.post(
+    "/v1/billing/checkout/start",
+    response_model=CheckoutStartResponse,
+    tags=["Billing"],
+    summary="Create a checkout link for a plan",
+)
+def checkout_start_endpoint(req: CheckoutStartRequest) -> CheckoutStartResponse:
+    result = create_checkout_for_plan(
+        email=req.email,
+        plan=req.plan,
+    )
+    return CheckoutStartResponse(
+        email=req.email,
+        plan=req.plan,
+        checkout_url=result["checkout_url"],
+        mode=result["mode"],
+        square_payment_link_id=result.get("square_payment_link_id"),
+    )
+
+
+@app.get(
+    "/checkout/success",
+    response_class=HTMLResponse,
+    tags=["Billing"],
+    summary="Checkout success page",
+)
+def checkout_success() -> HTMLResponse:
+    return HTMLResponse(
+        """
+        <html>
+          <head><title>Checkout Success</title></head>
+          <body style="font-family: Arial, sans-serif; max-width: 720px; margin: 40px auto;">
+            <h1>Payment received</h1>
+            <p>Your checkout completed successfully.</p>
+            <p>If your plan is subscription-based, your access will be activated after the webhook is processed.</p>
+            <p>You can now return to the site or contact support if you do not receive access shortly.</p>
+          </body>
+        </html>
+        """
+    )
+
+
+@app.get(
+    "/checkout/cancel",
+    response_class=HTMLResponse,
+    tags=["Billing"],
+    summary="Checkout canceled page",
+)
+def checkout_cancel() -> HTMLResponse:
+    return HTMLResponse(
+        """
+        <html>
+          <head><title>Checkout Canceled</title></head>
+          <body style="font-family: Arial, sans-serif; max-width: 720px; margin: 40px auto;">
+            <h1>Checkout canceled</h1>
+            <p>Your payment was not completed.</p>
+            <p>You can go back and try again whenever you're ready.</p>
+          </body>
+        </html>
+        """
+    )
+
+
+@app.post(
     "/v1/billing/square/webhook",
-    tags=["SQL"],
+    tags=["Billing"],
     summary="Receive Square webhook events",
 )
 async def square_webhook_endpoint(
@@ -437,11 +567,12 @@ async def square_webhook_endpoint(
     status = subscription.get("status")
 
     plan = None
-    if "individual" in raw_body.lower():
+    lowered = raw_body.lower()
+    if "individual" in lowered:
         plan = "individual"
-    elif "company" in raw_body.lower():
+    elif "company" in lowered:
         plan = "company"
-    elif "enterprise" in raw_body.lower():
+    elif "enterprise" in lowered:
         plan = "enterprise"
 
     if event_type:
