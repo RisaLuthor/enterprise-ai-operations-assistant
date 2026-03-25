@@ -4,6 +4,7 @@ __pycache__/
 
 # Virtual envs
 .venv/
+.venv-1/
 venv/
 
 # Generated outputs
@@ -12,6 +13,10 @@ htmlcov/
 .coverage
 .pytest_cache/
 .ruff_cache/
+
+# Local databases
+data/*.db
+*.db
 
 # Env files
 .env
