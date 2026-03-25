@@ -22,13 +22,11 @@ from src.core.errors import AppError, BadRequestError, app_error_handler, unhand
 from src.db.init_db import init_db
 from src.governance.redact import redact_sensitive
 from src.planner import build_plan
+from src.repositories.api_keys import get_api_key_for_user
 from src.repositories.usage import get_monthly_usage_count, record_usage_event
+from src.repositories.users import get_user_by_email
 from src.router import route_intent
 from src.tools.sql_generator import generate_safe_sql
-
-# ------------------------------------------------------------------------------
-# Configuration
-# ------------------------------------------------------------------------------
 
 APP_NAME = os.getenv("APP_NAME", "Enterprise AI Operations Assistant")
 APP_ENV = os.getenv("APP_ENV", "dev")
@@ -41,36 +39,20 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-# ------------------------------------------------------------------------------
-# Lifespan
-# ------------------------------------------------------------------------------
-
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     init_db()
     yield
 
 
-# ------------------------------------------------------------------------------
-# App
-# ------------------------------------------------------------------------------
-
 app = FastAPI(
     title=APP_NAME,
     summary="Governance-aware planning + schema-aware SQL drafting for enterprise workflows.",
     description=(
         "Enterprise-minded AI service that turns natural-language requests into reviewable, "
-        "audit-friendly operational artifacts.\n\n"
-        "**Key capabilities**:\n"
-        "- Intent routing (deterministic)\n"
-        "- Structured plan generation (assumptions/steps/required inputs)\n"
-        "- Governance-first redaction\n"
-        "- Optional audit logging\n"
-        "- Schema-aware SQL drafting (safe-by-default)\n"
-        "- API-key-ready commercial usage model\n"
-        "- Billing and hosted checkout support\n"
+        "audit-friendly operational artifacts."
     ),
-    version="1.4.0",
+    version="1.5.0",
     contact={
         "name": "Risa Luthor (Luthor.Tech)",
         "url": "https://rmluthor.us",
@@ -80,15 +62,11 @@ app = FastAPI(
         {"name": "Service", "description": "Service discovery and health monitoring endpoints."},
         {"name": "Planning", "description": "Structured planning and optional SQL drafting endpoints."},
         {"name": "SQL", "description": "Direct SQL drafting endpoints for product/API use."},
-        {"name": "Billing", "description": "Checkout, provisioning, billing, and pricing endpoints."},
+        {"name": "Billing", "description": "Checkout, provisioning, billing, pricing, and access endpoints."},
     ],
     lifespan=lifespan,
 )
 
-
-# ------------------------------------------------------------------------------
-# Exception handlers
-# ------------------------------------------------------------------------------
 
 @app.exception_handler(AppError)
 async def handle_app_error(request: Request, exc: AppError):
@@ -101,18 +79,12 @@ async def handle_unexpected_error(request: Request, exc: Exception):
     return await unhandled_error_handler(request, exc)
 
 
-# ------------------------------------------------------------------------------
-# Middleware
-# ------------------------------------------------------------------------------
-
 @app.middleware("http")
 async def add_service_headers_and_log(request: Request, call_next):
     start = time.perf_counter()
     response = await call_next(request)
     duration_ms = round((time.perf_counter() - start) * 1000, 2)
-
     response.headers["X-Service-Name"] = "enterprise-ai-ops"
-
     logger.info(
         "request_complete path=%s method=%s status=%s duration_ms=%s",
         request.url.path,
@@ -123,10 +95,6 @@ async def add_service_headers_and_log(request: Request, call_next):
     return response
 
 
-# ------------------------------------------------------------------------------
-# Models
-# ------------------------------------------------------------------------------
-
 class RootResponse(BaseModel):
     service: str
     docs: str
@@ -135,6 +103,7 @@ class RootResponse(BaseModel):
     sql_generate: str
     checkout_start: str
     pricing: str
+    access: str
 
 
 class HealthResponse(BaseModel):
@@ -144,25 +113,9 @@ class HealthResponse(BaseModel):
 
 
 class PlanRequest(BaseModel):
-    text: str = Field(
-        ...,
-        min_length=1,
-        max_length=2000,
-        description="User request text (natural language).",
-        examples=["Generate a SQL query to list active employees hired in the last 90 days"],
-    )
-    schema_name: Optional[str] = Field(
-        default=None,
-        min_length=1,
-        max_length=100,
-        description="Optional approved schema name used to guide SQL drafting.",
-        examples=["hr_demo"],
-    )
-    audit: bool = Field(
-        default=True,
-        description="If true, write an audit event to the audit log directory.",
-        examples=[False],
-    )
+    text: str = Field(..., min_length=1, max_length=2000)
+    schema_name: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    audit: bool = Field(default=True)
 
     @field_validator("text")
     @classmethod
@@ -182,27 +135,9 @@ class PlanResponse(BaseModel):
 
 
 class SQLGenerateRequest(BaseModel):
-    user_text: str = Field(
-        ...,
-        min_length=3,
-        max_length=2000,
-        description="Natural language request for SQL drafting.",
-        examples=["Show active employees hired in the last 90 days"],
-    )
-    top_n: int = Field(
-        default=100,
-        ge=1,
-        le=500,
-        description="Maximum rows to return in the draft SQL query.",
-        examples=[25],
-    )
-    schema_name: Optional[str] = Field(
-        default=None,
-        min_length=1,
-        max_length=100,
-        description="Optional approved schema name used to guide SQL drafting.",
-        examples=["hr_demo"],
-    )
+    user_text: str = Field(..., min_length=3, max_length=2000)
+    top_n: int = Field(default=100, ge=1, le=500)
+    schema_name: Optional[str] = Field(default=None, min_length=1, max_length=100)
 
     @field_validator("user_text")
     @classmethod
@@ -285,18 +220,26 @@ class CheckoutStartResponse(BaseModel):
     square_payment_link_id: Optional[str] = None
 
 
-# ------------------------------------------------------------------------------
-# Routes
-# ------------------------------------------------------------------------------
+class AccessRetrieveRequest(BaseModel):
+    email: str = Field(..., min_length=5, max_length=255)
 
-@app.api_route(
-    "/",
-    methods=["GET", "HEAD"],
-    response_model=RootResponse,
-    tags=["Service"],
-    summary="Service discovery",
-    description="Lightweight discovery endpoint for humans, tooling, and health dashboards.",
-)
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, value: str) -> str:
+        cleaned = value.strip().lower()
+        if "@" not in cleaned:
+            raise ValueError("A valid email address is required.")
+        return cleaned
+
+
+class AccessRetrieveResponse(BaseModel):
+    provisioned: bool
+    email: str
+    plan: Optional[str] = None
+    api_key: Optional[str] = None
+
+
+@app.api_route("/", methods=["GET", "HEAD"], response_model=RootResponse, tags=["Service"])
 def root() -> RootResponse:
     return RootResponse(
         service="enterprise-ai-ops",
@@ -306,63 +249,37 @@ def root() -> RootResponse:
         sql_generate="/v1/sql/generate",
         checkout_start="/v1/billing/checkout/start",
         pricing="/pricing",
+        access="/access",
     )
 
 
-@app.api_route(
-    "/health",
-    methods=["GET", "HEAD"],
-    response_model=HealthResponse,
-    tags=["Service"],
-    summary="Health check",
-    description="Health check endpoint suitable for container orchestration and monitoring.",
-)
+@app.api_route("/health", methods=["GET", "HEAD"], response_model=HealthResponse, tags=["Service"])
 def health() -> HealthResponse:
-    return HealthResponse(
-        status="ok",
-        app=APP_NAME,
-        env=APP_ENV,
-    )
+    return HealthResponse(status="ok", app=APP_NAME, env=APP_ENV)
 
 
-@app.get(
-    "/pricing",
-    response_class=HTMLResponse,
-    tags=["Billing"],
-    summary="Pricing page",
-)
+@app.api_route("/pricing", methods=["GET", "HEAD"], response_class=HTMLResponse, tags=["Billing"])
 def pricing_page() -> HTMLResponse:
     pricing_path = Path(__file__).resolve().parent / "frontend" / "pricing.html"
     return HTMLResponse(pricing_path.read_text(encoding="utf-8"))
 
 
-@app.post(
-    "/plan",
-    response_model=PlanResponse,
-    response_model_exclude_none=True,
-    tags=["Planning"],
-    summary="Generate a structured plan (and optional safe SQL draft)",
-    description=(
-        "Routes intent and returns a structured plan artifact (assumptions, steps, required inputs). "
-        "If the intent is `QUERY`, returns a safe-by-default SQL draft guided by an optional approved schema name."
-    ),
-)
-def plan_endpoint(
-    req: PlanRequest,
-    auth: AuthContext = Depends(require_api_key),
-) -> PlanResponse:
-    user_text = req.text.strip()
+@app.api_route("/access", methods=["GET", "HEAD"], response_class=HTMLResponse, tags=["Billing"])
+def access_page() -> HTMLResponse:
+    access_path = Path(__file__).resolve().parent / "frontend" / "access.html"
+    return HTMLResponse(access_path.read_text(encoding="utf-8"))
 
+
+@app.post("/plan", response_model=PlanResponse, response_model_exclude_none=True, tags=["Planning"])
+def plan_endpoint(req: PlanRequest, auth: AuthContext = Depends(require_api_key)) -> PlanResponse:
+    user_text = req.text.strip()
     redaction = redact_sensitive(user_text)
     route = route_intent(user_text)
     plan = build_plan(route, user_text)
 
     sql_payload = None
     if plan.intent == "QUERY":
-        sql_output = generate_safe_sql(
-            user_text=user_text,
-            schema_name=req.schema_name,
-        )
+        sql_output = generate_safe_sql(user_text=user_text, schema_name=req.schema_name)
         sql_payload = {
             "dialect": getattr(sql_output, "dialect", "sqlserver"),
             "query": sql_output.query,
@@ -402,34 +319,17 @@ def plan_endpoint(
     )
 
 
-@app.post(
-    "/v1/sql/generate",
-    response_model=SQLGenerateResponse,
-    tags=["SQL"],
-    summary="Generate safe draft SQL",
-    description="Direct SQL drafting endpoint for product/API use with plan-aware limits.",
-)
+@app.post("/v1/sql/generate", response_model=SQLGenerateResponse, tags=["SQL"])
 def generate_sql_endpoint(
     req: SQLGenerateRequest,
     auth: AuthContext = Depends(require_api_key),
 ) -> SQLGenerateResponse:
-    logger.info(
-        "sql_generate_requested user_id=%s email=%s plan=%s schema_name=%s top_n=%s",
-        auth.user_id,
-        auth.email,
-        auth.plan,
-        req.schema_name,
-        req.top_n,
-    )
-
     plan_def = PLANS.get(auth.plan)
     if not plan_def:
         raise BadRequestError("Unknown plan configuration.")
 
     if req.top_n > plan_def.max_top_n:
-        raise BadRequestError(
-            f"{auth.plan.capitalize()} plan supports top_n up to {plan_def.max_top_n}."
-        )
+        raise BadRequestError(f"{auth.plan.capitalize()} plan supports top_n up to {plan_def.max_top_n}.")
 
     current_usage = get_monthly_usage_count(auth.user_id)
     if plan_def.monthly_request_limit is not None and current_usage >= plan_def.monthly_request_limit:
@@ -444,9 +344,7 @@ def generate_sql_endpoint(
     if auth.user_id != 0:
         record_usage_event(auth.user_id, "/v1/sql/generate")
 
-    risk_level = "LOW"
-    if req.schema_name is None:
-        risk_level = "MEDIUM"
+    risk_level = "LOW" if req.schema_name is not None else "MEDIUM"
 
     return SQLGenerateResponse(
         dialect=getattr(sql_output, "dialect", "sqlserver"),
@@ -459,12 +357,7 @@ def generate_sql_endpoint(
     )
 
 
-@app.post(
-    "/v1/admin/provision-user",
-    response_model=ProvisionUserResponse,
-    tags=["Billing"],
-    summary="Provision a user and API key",
-)
+@app.post("/v1/admin/provision-user", response_model=ProvisionUserResponse, tags=["Billing"])
 def provision_user_endpoint(
     req: ProvisionUserRequest,
     auth: AuthContext = Depends(require_api_key),
@@ -480,17 +373,9 @@ def provision_user_endpoint(
     return ProvisionUserResponse(**result)
 
 
-@app.post(
-    "/v1/billing/checkout/start",
-    response_model=CheckoutStartResponse,
-    tags=["Billing"],
-    summary="Create a checkout link for a plan",
-)
+@app.post("/v1/billing/checkout/start", response_model=CheckoutStartResponse, tags=["Billing"])
 def checkout_start_endpoint(req: CheckoutStartRequest) -> CheckoutStartResponse:
-    result = create_checkout_for_plan(
-        email=req.email,
-        plan=req.plan,
-    )
+    result = create_checkout_for_plan(email=req.email, plan=req.plan)
     return CheckoutStartResponse(
         email=req.email,
         plan=req.plan,
@@ -500,12 +385,32 @@ def checkout_start_endpoint(req: CheckoutStartRequest) -> CheckoutStartResponse:
     )
 
 
-@app.get(
-    "/checkout/success",
-    response_class=HTMLResponse,
-    tags=["Billing"],
-    summary="Checkout success page",
-)
+@app.post("/v1/access/retrieve", response_model=AccessRetrieveResponse, tags=["Billing"])
+def access_retrieve_endpoint(req: AccessRetrieveRequest) -> AccessRetrieveResponse:
+    user = get_user_by_email(req.email)
+    if not user or not user.get("is_active"):
+        return AccessRetrieveResponse(
+            provisioned=False,
+            email=req.email,
+        )
+
+    key_record = get_api_key_for_user(int(user["id"]))
+    if not key_record or not key_record.get("is_active"):
+        return AccessRetrieveResponse(
+            provisioned=False,
+            email=req.email,
+            plan=user.get("plan"),
+        )
+
+    return AccessRetrieveResponse(
+        provisioned=True,
+        email=req.email,
+        plan=user.get("plan"),
+        api_key=key_record.get("api_key"),
+    )
+
+
+@app.get("/checkout/success", response_class=HTMLResponse, tags=["Billing"])
 def checkout_success() -> HTMLResponse:
     return HTMLResponse(
         """
@@ -514,20 +419,15 @@ def checkout_success() -> HTMLResponse:
           <body style="font-family: Arial, sans-serif; max-width: 720px; margin: 40px auto;">
             <h1>Payment received</h1>
             <p>Your checkout completed successfully.</p>
-            <p>If your plan is subscription-based, your access will be activated after the webhook is processed.</p>
-            <p>You can now return to the site or contact support if you do not receive access shortly.</p>
+            <p>If your access has already been provisioned, you can retrieve it now.</p>
+            <p><a href="/access">Go to access retrieval</a></p>
           </body>
         </html>
         """
     )
 
 
-@app.get(
-    "/checkout/cancel",
-    response_class=HTMLResponse,
-    tags=["Billing"],
-    summary="Checkout canceled page",
-)
+@app.get("/checkout/cancel", response_class=HTMLResponse, tags=["Billing"])
 def checkout_cancel() -> HTMLResponse:
     return HTMLResponse(
         """
@@ -537,17 +437,14 @@ def checkout_cancel() -> HTMLResponse:
             <h1>Checkout canceled</h1>
             <p>Your payment was not completed.</p>
             <p>You can go back and try again whenever you're ready.</p>
+            <p><a href="/pricing">Return to pricing</a></p>
           </body>
         </html>
         """
     )
 
 
-@app.post(
-    "/v1/billing/square/webhook",
-    tags=["Billing"],
-    summary="Receive Square webhook events",
-)
+@app.post("/v1/billing/square/webhook", tags=["Billing"])
 async def square_webhook_endpoint(
     request: Request,
     x_square_hmacsha256_signature: Optional[str] = Header(default=None),
