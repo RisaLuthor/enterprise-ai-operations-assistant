@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import os
 import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -17,6 +16,7 @@ from src.billing.checkout import create_checkout_for_plan
 from src.billing.plans import PLANS
 from src.billing.provisioning import apply_square_subscription_update, provision_user
 from src.billing.square_webhooks import verify_square_webhook_signature
+from src.config import settings
 from src.core.auth import AuthContext, require_api_key
 from src.core.errors import AppError, BadRequestError, app_error_handler, unhandled_error_handler
 from src.db.init_db import init_db
@@ -27,10 +27,11 @@ from src.repositories.usage import get_monthly_usage_count, record_usage_event
 from src.repositories.users import get_user_by_email
 from src.router import route_intent
 from src.tools.sql_generator import generate_safe_sql
+from src.config import settings
 
-APP_NAME = os.getenv("APP_NAME", "Enterprise AI Operations Assistant")
-APP_ENV = os.getenv("APP_ENV", "dev")
-LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+APP_NAME = settings.app_name
+APP_ENV = settings.app_env
+LOG_LEVEL = settings.log_level.upper()
 
 logging.basicConfig(
     level=getattr(logging, LOG_LEVEL, logging.INFO),
