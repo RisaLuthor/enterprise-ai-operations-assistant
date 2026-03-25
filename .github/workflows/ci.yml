@@ -5,6 +5,9 @@ on:
     branches: [ main ]
   pull_request:
 
+permissions:
+  contents: write
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -15,6 +18,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -27,7 +32,7 @@ jobs:
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then python -m pip install -r requirements.txt; fi
           if [ -f pyproject.toml ]; then python -m pip install -e ".[dev]" || python -m pip install -e .; fi
-          python -m pip install pytest
+          python -m pip install pytest pytest-cov coverage-badge
 
       - name: Compile (if src exists)
         run: |
@@ -37,5 +42,32 @@ jobs:
             echo "No src/ directory; skipping compileall."
           fi
 
-      - name: Run tests
-        run: python -m pytest -q
+      - name: Run tests with coverage
+        run: |
+          if [ -d src ]; then
+            python -m pytest -q --cov=src --cov-report=term-missing --cov-report=xml --cov-report=html
+          else
+            python -m pytest -q --cov=. --cov-report=term-missing --cov-report=xml --cov-report=html
+          fi
+
+      - name: Generate coverage badge
+        run: |
+          mkdir -p badges
+          coverage-badge -o badges/coverage.svg -f
+
+      - name: Upload coverage artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-artifacts
+          path: |
+            coverage.xml
+            htmlcov/
+
+      - name: Commit updated coverage badge
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add badges/coverage.svg
+          git diff --cached --quiet || git commit -m "Update coverage badge [skip ci]"
+          git push
