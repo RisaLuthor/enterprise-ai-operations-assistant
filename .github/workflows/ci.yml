@@ -51,7 +51,27 @@ jobs:
       - name: Generate coverage badge
         run: |
           mkdir -p badges
-          python -m coverage_badge -o badges/coverage.svg -f
+          python - <<'PY'
+          import xml.etree.ElementTree as ET
+          import anybadge
+
+          tree = ET.parse("coverage.xml")
+          root = tree.getroot()
+          line_rate = float(root.attrib.get("line-rate", 0))
+          coverage = round(line_rate * 100, 1)
+
+          thresholds = {
+              50: "red",
+              70: "orange",
+              85: "yellow",
+              95: "yellowgreen",
+              100: "brightgreen",
+          }
+
+          badge = anybadge.Badge("coverage", f"{coverage}%", thresholds=thresholds)
+          badge.write_badge("badges/coverage.svg")
+          print(f"Generated coverage badge: {coverage}%")
+          PY
 
       - name: Compile (if src exists)
         run: |
