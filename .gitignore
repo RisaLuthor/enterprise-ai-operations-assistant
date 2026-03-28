@@ -25,4 +25,4 @@ data/*.db
 # OS/editor
 .DS_Store
 .vscode/
-.idea/
+.idea/.venv-2/
