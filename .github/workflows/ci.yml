@@ -14,15 +14,37 @@ jobs:
     env:
       PYTHONPATH: ${{ github.workspace }}
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      APP_NAME: Enterprise AI Operations Assistant
+      APP_ENV: test
+      LOG_LEVEL: INFO
+      REQUIRE_API_KEY: true
+      APP_DB_PATH: data/app.db
+
+      INDIVIDUAL_API_KEY: test-individual-key
+      COMPANY_API_KEY: test-company-key
+      ENTERPRISE_API_KEY: test-enterprise-key
+
+      SQUARE_ACCESS_TOKEN: test-square-token
+      SQUARE_ENVIRONMENT: sandbox
+      SQUARE_LOCATION_ID: test-location-id
+      SQUARE_WEBHOOK_SIGNATURE_KEY: test-webhook-signature
+      SQUARE_WEBHOOK_NOTIFICATION_URL: https://example.com/v1/billing/square/webhook
+
+      SQUARE_INDIVIDUAL_PLAN_VARIATION_ID: test-individual-plan
+      SQUARE_COMPANY_PLAN_VARIATION_ID: test-company-plan
+      SQUARE_ENTERPRISE_PAYMENT_LINK: https://example.com/enterprise
+
+      APP_SUCCESS_URL: http://127.0.0.1:8000/checkout/success
+      APP_CANCEL_URL: http://127.0.0.1:8000/checkout/cancel
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: "pip"
