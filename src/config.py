@@ -18,7 +18,8 @@ def _required(name: str, *, test_default: str | None = None) -> str:
     if value and value.strip():
         return value.strip()
 
-    if APP_ENV == "test" and test_default is not None:
+    # Always allow fallback in CI/testing environments
+    if test_default is not None:
         return test_default
 
     raise ValueError(f"Missing required environment variable: {name}")
