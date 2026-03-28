@@ -11,11 +11,18 @@ def _as_bool(value: str | None, default: bool = False) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "y", "on"}
 
 
-def _required(name: str) -> str:
+APP_ENV = os.getenv("APP_ENV", "dev").strip().lower()
+
+
+def _required(name: str, *, test_default: str | None = None) -> str:
     value = os.getenv(name)
-    if value is None or not value.strip():
-        raise ValueError(f"Missing required environment variable: {name}")
-    return value.strip()
+    if value and value.strip():
+        return value.strip()
+
+    if APP_ENV == "test" and test_default is not None:
+        return test_default
+
+    raise ValueError(f"Missing required environment variable: {name}")
 
 
 @dataclass(frozen=True)
@@ -61,20 +68,38 @@ settings = Settings(
     require_api_key=_as_bool(os.getenv("REQUIRE_API_KEY"), default=True),
     app_db_path=os.getenv("APP_DB_PATH", "data/app.db"),
 
-    individual_api_key=_required("INDIVIDUAL_API_KEY"),
-    company_api_key=_required("COMPANY_API_KEY"),
-    enterprise_api_key=_required("ENTERPRISE_API_KEY"),
+    individual_api_key=_required("INDIVIDUAL_API_KEY", test_default="test-individual-key"),
+    company_api_key=_required("COMPANY_API_KEY", test_default="test-company-key"),
+    enterprise_api_key=_required("ENTERPRISE_API_KEY", test_default="test-enterprise-key"),
 
-    square_access_token=_required("SQUARE_ACCESS_TOKEN"),
+    square_access_token=_required("SQUARE_ACCESS_TOKEN", test_default="test-square-token"),
     square_environment=os.getenv("SQUARE_ENVIRONMENT", "sandbox"),
-    square_location_id=_required("SQUARE_LOCATION_ID"),
-    square_webhook_signature_key=_required("SQUARE_WEBHOOK_SIGNATURE_KEY"),
-    square_webhook_notification_url=_required("SQUARE_WEBHOOK_NOTIFICATION_URL"),
+    square_location_id=_required("SQUARE_LOCATION_ID", test_default="test-location-id"),
+    square_webhook_signature_key=_required("SQUARE_WEBHOOK_SIGNATURE_KEY", test_default="test-webhook-signature"),
+    square_webhook_notification_url=_required(
+        "SQUARE_WEBHOOK_NOTIFICATION_URL",
+        test_default="https://example.com/v1/billing/square/webhook",
+    ),
 
-    square_individual_plan_variation_id=_required("SQUARE_INDIVIDUAL_PLAN_VARIATION_ID"),
-    square_company_plan_variation_id=_required("SQUARE_COMPANY_PLAN_VARIATION_ID"),
-    square_enterprise_payment_link=_required("SQUARE_ENTERPRISE_PAYMENT_LINK"),
+    square_individual_plan_variation_id=_required(
+        "SQUARE_INDIVIDUAL_PLAN_VARIATION_ID",
+        test_default="test-individual-plan",
+    ),
+    square_company_plan_variation_id=_required(
+        "SQUARE_COMPANY_PLAN_VARIATION_ID",
+        test_default="test-company-plan",
+    ),
+    square_enterprise_payment_link=_required(
+        "SQUARE_ENTERPRISE_PAYMENT_LINK",
+        test_default="https://example.com/enterprise",
+    ),
 
-    app_success_url=_required("APP_SUCCESS_URL"),
-    app_cancel_url=_required("APP_CANCEL_URL"),
+    app_success_url=_required(
+        "APP_SUCCESS_URL",
+        test_default="http://127.0.0.1:8000/checkout/success",
+    ),
+    app_cancel_url=_required(
+        "APP_CANCEL_URL",
+        test_default="http://127.0.0.1:8000/checkout/cancel",
+    ),
 )
