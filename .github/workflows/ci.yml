@@ -36,7 +36,6 @@ jobs:
 
       APP_SUCCESS_URL: http://127.0.0.1:8000/checkout/success
       APP_CANCEL_URL: http://127.0.0.1:8000/checkout/cancel
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4

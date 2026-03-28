@@ -4,14 +4,13 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+APP_ENV = os.getenv("APP_ENV", "dev").strip().lower()
+
 
 def _as_bool(value: str | None, default: bool = False) -> bool:
     if value is None:
         return default
     return value.strip().lower() in {"1", "true", "yes", "y", "on"}
-
-
-APP_ENV = os.getenv("APP_ENV", "dev").strip().lower()
 
 
 def _required(name: str, *, test_default: str | None = None) -> str:
