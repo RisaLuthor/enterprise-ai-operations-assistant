@@ -3,5 +3,5 @@ uvicorn[standard]==0.48.0
 pytest==9.0.3
 pytest-cov==7.1.0
 httpx==0.28.1
-ruff==0.15.14
+ruff==0.15.15
 squareup==44.1.0.20260520
