@@ -4,4 +4,4 @@ pytest==9.2.0
 pytest-cov==7.1.0
 httpx==0.28.1
 ruff==0.17.5
-squareup==46.0.0.20260916
+squareup==46.1.0.20261118
